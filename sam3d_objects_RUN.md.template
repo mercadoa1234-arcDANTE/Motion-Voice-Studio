@@ -1,0 +1,50 @@
+# SAM 3D Body — Job {{JOB_ID}}
+
+A bundle prepared by **cad-studio**. The sandbox cannot run this model
+(VRAM requirement is 16 GB); run on your own GPU machine.
+
+## What it does
+
+Reconstructs a 3D human body mesh (with pose) from a single image. Output is
+in Meta's Momentum Human Rig (MHR) format, which converts to standard FBX or
+glTF via the open-source tool included in the repo.
+
+## Hardware
+
+- NVIDIA GPU, **16 GB VRAM**
+
+## Setup
+
+```bash
+git clone https://github.com/facebookresearch/sam-3d-body
+cd sam-3d-body
+# Follow INSTALL.md to:
+#   1. Create the conda env
+#   2. Request HuggingFace checkpoint access for SAM 3D Body
+#   3. Download the checkpoint
+```
+
+## Run
+
+```bash
+python demo.py --image inputs/00.png --output outputs/{{JOB_ID}}/
+```
+
+Optional: pass `--keypoints` and `--masks` for higher fidelity if you have them.
+
+## Convert MHR → glTF
+
+```bash
+# The repo provides this conversion tool
+python scripts/mhr_to_gltf.py outputs/{{JOB_ID}}/body.mhr outputs/{{JOB_ID}}/body.glb
+```
+
+## Output to bring back
+
+Upload `outputs/{{JOB_ID}}/body.glb` to the chat. cad-studio will resume.
+
+## Combining with SAM 3D Objects
+
+The two models share a coordinate frame, so a body and surrounding objects can
+be reconstructed and composited. See `examples/combined_body_object.ipynb` in
+the sam-3d-body repo.
