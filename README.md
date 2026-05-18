@@ -1,18 +1,20 @@
-# motion-studio v3
+# motion-voice-studio
 
-The unified teaching-studio skill. CAD + Manim + Voice + Image Insertion in
-one pipeline. Replaces v2 and consolidates the lessons from production runs.
+The unified AI teaching skill. CAD + Manim + Voice + Image Insertion in
+one pipeline.
 
-Each shot picks its render engine. The orchestrator dispatches per shot. Audio
-is generated first; video timing follows.
+The AI plans all the shots & scripts. Each shot, the AI picks its render engine. The orchestrator dispatches per shot. Audio
+is generated first; video timing follows to be synced to audio markers.
 
 ---
+
+The ultimate teaching-studio skill. Generate complete narrated educational, scientific, and engineering videos that combine: parametric CAD (build123d) with exploded views and orbital cameras (pyvista), Manim motion graphics and equation reveals, source-document image insertion (PDF page screenshots, Substack post screenshots, photographs, figures), composite overlays, AI-driven 3D reconstruction handoffs, and high-fidelity browser-GPU renders — all narrated with bundled neural Kokoro-82M CPU TTS (seven voices, no network).
 
 ## v3 changelog vs v2
 
 The five concrete fixes from May 2026 production review:
 
-1. **Phrase-aware Kokoro chunker.** v2's per-sentence synthesis produced choppy delivery for short phrase rhythms ("No three. No six. No nine." → 3 calls + 320ms silences = stilted). v3 keeps related phrases in one Kokoro call so its prosody handles them naturally. See `references/PHRASE_PACING.md`.
+1. **Phrase-aware Kokoro chunker.** v2's per-sentence synthesis produced choppy delivery for short phrase rhythms ("Never three. Never six. Never nine." → 3 calls + 320ms silences = stilted). v3 keeps related phrases in one Kokoro call so its prosody handles them naturally. See `references/PHRASE_PACING.md`.
 
 2. **Soft-sub MP4 default.** v2 baked SRT into pixels. v3 ships subtitles as a `mov_text` track inside the MP4 + a sidecar `.srt` alongside the file. User toggles in player. Manim animated text on screen is still part of the picture; only the player-overlay subtitle pixels were removed.
 
@@ -200,7 +202,7 @@ Documented in detail at `references/AGENT_LOOP.md`. Short version:
 ## License & attribution
 
 Bundled assets:
-- **Kokoro-82M** TTS model: licensed permissively by the model authors.
+- **Kokoro-82M** TTS model: given MIT license by the model authors.
 - **build123d, pyvista, manim, ffmpeg, Pillow**: open-source, see respective licenses.
 
-All Motion Studio code: distribute freely; attribute Anthropic / the build context if useful.
+All other Motion Voice Studio code is MIT liscensed.
