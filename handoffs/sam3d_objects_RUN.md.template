@@ -1,0 +1,45 @@
+# SAM 3D Objects — Job {{JOB_ID}}
+
+A bundle prepared by **cad-studio**. The sandbox cannot run this model
+(VRAM requirement is 16–32 GB); run on your own GPU machine.
+
+## Hardware
+
+- NVIDIA GPU, **16 GB VRAM** minimum, **24+ GB recommended** for batch.
+- The model OOMs at 20 GB without batching tweaks.
+
+## Setup
+
+```bash
+git clone https://github.com/facebookresearch/sam-3d-objects
+cd sam-3d-objects
+conda create -n sam3d python=3.10
+conda activate sam3d
+pip install -e .
+# Follow the repo's instructions to request HuggingFace checkpoint access.
+```
+
+## Run
+
+The model needs **one image + one mask** per object. If you don't already have
+a mask, generate one with SAM 3 first (or paint by hand in Photoshop / Krita /
+GIMP). Then:
+
+```python
+import sys; sys.path.append("notebook")
+from inference import Inference, load_image, load_single_mask
+
+inf = Inference("checkpoints/hf/pipeline.yaml", compile=False)
+img = load_image("inputs/00.png")             # your image (1024×1024)
+mask = load_single_mask("masks/", index=0)    # your mask
+out = inf(img, mask, seed=42)
+
+out["mesh"].export("outputs/{{JOB_ID}}/mesh.glb")
+out["gs"].save_ply("outputs/{{JOB_ID}}/splat.ply")
+```
+
+For multi-object reconstruction, see the repo's `notebook/multi_object.ipynb`.
+
+## Output to bring back
+
+Upload `outputs/{{JOB_ID}}/mesh.glb` to the chat. cad-studio will resume.

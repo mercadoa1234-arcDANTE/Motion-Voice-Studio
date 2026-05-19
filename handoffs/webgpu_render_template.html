@@ -1,0 +1,434 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>{{TITLE}}</title>
+<style>
+  :root { --bg:#0e1116; --panel:#1a1d23; --text:#e6e8eb; --accent:#7aa9d6; --warn:#e6a655; --ok:#7ac17a; }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;height:100%;background:var(--bg);color:var(--text);
+            font:14px/1.45 -apple-system,Segoe UI,Roboto,sans-serif}
+  #app{display:grid;grid-template-columns:1fr 320px;height:100vh}
+  #stage{position:relative;background:#000;overflow:hidden}
+  #stage canvas{display:block;width:100%;height:100%}
+  #overlay{position:absolute;top:8px;left:8px;background:rgba(0,0,0,0.55);
+           padding:6px 10px;border-radius:6px;font-size:12px;pointer-events:none}
+  #panel{background:var(--panel);padding:16px;overflow-y:auto;border-left:1px solid #2a2f38}
+  h1{font-size:14px;margin:0 0 12px;color:var(--accent);letter-spacing:.05em;text-transform:uppercase}
+  h2{font-size:12px;margin:18px 0 8px;color:#9aa3ad;text-transform:uppercase;letter-spacing:.06em}
+  .row{display:flex;gap:8px;margin-bottom:8px;align-items:center}
+  button{background:#2a3038;color:var(--text);border:1px solid #3a4048;padding:8px 12px;
+         border-radius:5px;font-size:13px;cursor:pointer;font-family:inherit}
+  button:hover{background:#353c47}
+  button:disabled{opacity:.5;cursor:not-allowed}
+  button.primary{background:#3a6a9e;border-color:#3a6a9e}
+  button.primary:hover{background:#4a7ab0}
+  select,input{background:#22262e;color:var(--text);border:1px solid #3a4048;padding:6px;
+                border-radius:4px;font-family:inherit;font-size:13px;width:100%}
+  label{display:block;color:#9aa3ad;font-size:11px;margin-bottom:4px;text-transform:uppercase;letter-spacing:.04em}
+  #log{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11px;color:#9aa3ad;
+       background:#0a0c10;padding:8px;border-radius:4px;max-height:160px;overflow-y:auto;white-space:pre-wrap}
+  .pill{display:inline-block;padding:2px 7px;border-radius:10px;font-size:10px;letter-spacing:.04em;text-transform:uppercase}
+  .pill.ok{background:#1d3a25;color:var(--ok)}
+  .pill.warn{background:#3a2f1d;color:var(--warn)}
+  details summary{cursor:pointer;color:#9aa3ad;font-size:11px;text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px}
+  details pre{margin:6px 0 0;font-size:10px;color:#7a818a;max-height:120px;overflow:auto}
+  .progress{height:6px;background:#2a2f38;border-radius:3px;overflow:hidden;margin-top:6px}
+  .progress > div{height:100%;background:var(--accent);width:0;transition:width 0.15s}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="stage">
+    <canvas id="canvas"></canvas>
+    <div id="overlay">Click and drag to orbit · scroll to zoom</div>
+  </div>
+  <div id="panel">
+    <h1>cad-studio · render handoff</h1>
+
+    <h2>Backend <span id="backend-pill" class="pill warn">detecting…</span></h2>
+    <div class="row"><span id="backend-info" style="font-size:11px;color:#9aa3ad"></span></div>
+
+    <h2>Preset</h2>
+    <select id="preset"></select>
+
+    <h2>Resolution</h2>
+    <select id="resolution">
+      <option value="1920x1080">1920 × 1080 (1080p)</option>
+      <option value="1280x720">1280 × 720 (720p)</option>
+      <option value="3840x2160">3840 × 2160 (4K)</option>
+      <option value="2560x1440">2560 × 1440 (1440p)</option>
+    </select>
+
+    <h2>Export</h2>
+    <div class="row">
+      <button id="btn-still" class="primary">Capture still PNG</button>
+    </div>
+    <div class="row">
+      <button id="btn-png-seq">Render PNG sequence (zip)</button>
+    </div>
+    <div class="row">
+      <button id="btn-webm">Record WebM</button>
+    </div>
+    <div class="progress"><div id="progress-bar"></div></div>
+
+    <h2>Log</h2>
+    <div id="log">Initializing…</div>
+
+    <details>
+      <summary>Embedded preset data</summary>
+      <pre id="preset-json"></pre>
+    </details>
+
+    <h2>When done</h2>
+    <div style="font-size:12px;color:#9aa3ad">
+      Drag the downloaded file (PNG, zip, or WebM) back into the chat.
+      cad-studio will detect it and resume.
+    </div>
+  </div>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+
+// ── Embedded data ───────────────────────────────────────────────────────
+const GLB_DATA_URL = "{{GLB_DATA_URL}}";
+const PRESETS = {{PRESETS_JSON}};
+document.getElementById("preset-json").textContent = JSON.stringify(PRESETS, null, 2);
+
+// ── Logging ─────────────────────────────────────────────────────────────
+const logEl = document.getElementById("log");
+function log(...a) {
+  const s = a.map(x => typeof x === "string" ? x : JSON.stringify(x)).join(" ");
+  logEl.textContent += "\n" + s;
+  logEl.scrollTop = logEl.scrollHeight;
+  console.log(...a);
+}
+
+// ── Backend detection ───────────────────────────────────────────────────
+const backendPill = document.getElementById("backend-pill");
+const backendInfo = document.getElementById("backend-info");
+let useWebGPU = false;
+async function detectBackend() {
+  if (!navigator.gpu) { backendPill.textContent = "WebGL2"; backendPill.className = "pill warn"; backendInfo.textContent = "WebGPU unavailable; using WebGL2"; return; }
+  try {
+    const adapter = await navigator.gpu.requestAdapter();
+    if (!adapter) throw new Error("no adapter");
+    useWebGPU = true;
+    backendPill.textContent = "WebGPU";
+    backendPill.className = "pill ok";
+    backendInfo.textContent = `adapter: ${adapter?.info?.vendor || "unknown"}`;
+  } catch (e) {
+    backendPill.textContent = "WebGL2";
+    backendPill.className = "pill warn";
+    backendInfo.textContent = "WebGPU failed; using WebGL2";
+  }
+}
+
+// ── Scene setup ─────────────────────────────────────────────────────────
+const canvas = document.getElementById("canvas");
+const stage = document.getElementById("stage");
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0xf5f7fa);
+
+const camera = new THREE.PerspectiveCamera(35, 1, 0.1, 10000);
+camera.position.set(80, 60, 80);
+camera.lookAt(0, 0, 0);
+
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: true });
+renderer.setPixelRatio(window.devicePixelRatio);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.0;
+
+const pmremGenerator = new THREE.PMREMGenerator(renderer);
+scene.environment = pmremGenerator.fromScene(new RoomEnvironment(), 0.04).texture;
+
+const key = new THREE.DirectionalLight(0xffffff, 1.2);
+key.position.set(50, 80, 50);
+scene.add(key);
+const fill = new THREE.DirectionalLight(0xffffff, 0.4);
+fill.position.set(-50, 20, -30);
+scene.add(fill);
+const ambient = new THREE.AmbientLight(0xffffff, 0.25);
+scene.add(ambient);
+
+const controls = new OrbitControls(camera, canvas);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+
+function resize() {
+  const w = stage.clientWidth, h = stage.clientHeight;
+  renderer.setSize(w, h, false);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+}
+new ResizeObserver(resize).observe(stage);
+resize();
+
+// ── Load model ─────────────────────────────────────────────────────────
+let modelRoot = null;
+const componentsByName = {};
+async function loadModel() {
+  const loader = new GLTFLoader();
+  log("loading embedded GLB…");
+  return new Promise((res, rej) => {
+    loader.load(GLB_DATA_URL, (gltf) => {
+      modelRoot = gltf.scene;
+      scene.add(modelRoot);
+      // Index nodes for exploded-view animation later
+      modelRoot.traverse((o) => {
+        if (o.name) componentsByName[o.name] = o;
+      });
+      // Frame camera
+      const box = new THREE.Box3().setFromObject(modelRoot);
+      const size = box.getSize(new THREE.Vector3()).length();
+      const center = box.getCenter(new THREE.Vector3());
+      modelRoot.position.sub(center);  // center on origin
+      camera.position.copy(new THREE.Vector3(size * 1.0, size * 0.7, size * 1.0));
+      controls.target.set(0, 0, 0);
+      controls.update();
+      log(`model loaded: ${Object.keys(componentsByName).length} named nodes, bbox ${size.toFixed(2)}`);
+      res();
+    }, (xhr) => {
+      // progress unavailable for data URLs
+    }, (err) => { log("GLB load failed:", err.message); rej(err); });
+  });
+}
+
+// ── Render loop ────────────────────────────────────────────────────────
+let isRecording = false;
+function animate() {
+  requestAnimationFrame(animate);
+  controls.update();
+  renderer.render(scene, camera);
+}
+
+// ── Preset selector ────────────────────────────────────────────────────
+const presetSel = document.getElementById("preset");
+for (const p of PRESETS) {
+  const opt = document.createElement("option");
+  opt.value = p.id;
+  opt.textContent = `${p.id} · ${p.kind}`;
+  presetSel.appendChild(opt);
+}
+
+function getResolution() {
+  const [w, h] = document.getElementById("resolution").value.split("x").map(Number);
+  return { w, h };
+}
+
+function applyCameraStatic(cam) {
+  if (cam.position) camera.position.fromArray(cam.position);
+  if (cam.target)  controls.target.fromArray(cam.target);
+  if (cam.fov) { camera.fov = cam.fov; camera.updateProjectionMatrix(); }
+  controls.update();
+}
+
+function applyOrbitFrame(preset, t) {
+  const elev = (preset.elevation_deg ?? 25) * Math.PI / 180;
+  const az = (preset.azimuth_from_deg ?? 0) + t * ((preset.azimuth_to_deg ?? 360) - (preset.azimuth_from_deg ?? 0));
+  const azR = az * Math.PI / 180;
+  const box = new THREE.Box3().setFromObject(modelRoot);
+  const size = box.getSize(new THREE.Vector3()).length();
+  const r = size * 1.2;
+  camera.position.set(
+    r * Math.cos(azR) * Math.cos(elev),
+    r * Math.sin(elev),
+    r * Math.sin(azR) * Math.cos(elev),
+  );
+  controls.target.set(0, 0, 0);
+  camera.lookAt(0, 0, 0);
+}
+
+// ── Offscreen frame capture ────────────────────────────────────────────
+function setRenderResolution(w, h) {
+  renderer.setSize(w, h, false);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+}
+function captureCanvasBlob(type = "image/png", quality = 0.95) {
+  return new Promise((res) => canvas.toBlob(res, type, quality));
+}
+function setProgress(pct) { document.getElementById("progress-bar").style.width = (pct * 100).toFixed(1) + "%"; }
+
+// ── Still capture ──────────────────────────────────────────────────────
+async function captureStill() {
+  const { w, h } = getResolution();
+  const presetId = presetSel.value;
+  const p = PRESETS.find(x => x.id === presetId);
+  setRenderResolution(w, h);
+  if (p.kind === "static") applyCameraStatic(p.camera || {});
+  else applyOrbitFrame(p, 0);
+  renderer.render(scene, camera);
+  const blob = await captureCanvasBlob();
+  download(blob, `${p.id}.png`);
+  log(`captured ${p.id}.png at ${w}x${h}`);
+  resize();
+}
+
+// ── PNG sequence ───────────────────────────────────────────────────────
+async function renderPngSequence() {
+  const { w, h } = getResolution();
+  const p = PRESETS.find(x => x.id === presetSel.value);
+  const fps = p.fps ?? 30, duration = p.duration_s ?? 6;
+  const N = Math.max(1, Math.round(fps * duration));
+  setRenderResolution(w, h);
+  const zip = new SimpleZip();
+  document.getElementById("btn-png-seq").disabled = true;
+  log(`rendering ${N} frames @ ${w}x${h}…`);
+  for (let i = 0; i < N; i++) {
+    const t = i / Math.max(1, N - 1);
+    if (p.kind === "orbit") applyOrbitFrame(p, t);
+    else if (p.kind === "static") applyCameraStatic(p.camera || {});
+    renderer.render(scene, camera);
+    const blob = await captureCanvasBlob();
+    const buf = new Uint8Array(await blob.arrayBuffer());
+    zip.add(`${p.output?.prefix || p.id + "_"}${String(i).padStart(4, "0")}.png`, buf);
+    setProgress((i + 1) / N);
+    await new Promise(r => setTimeout(r, 0));
+  }
+  const zipBlob = zip.build();
+  download(zipBlob, `${p.id}.zip`);
+  log(`done: ${N} frames in ${p.id}.zip`);
+  document.getElementById("btn-png-seq").disabled = false;
+  setProgress(0);
+  resize();
+}
+
+// ── WebM via MediaRecorder ─────────────────────────────────────────────
+async function recordWebM() {
+  const { w, h } = getResolution();
+  const p = PRESETS.find(x => x.id === presetSel.value);
+  const fps = p.fps ?? 30, duration = p.duration_s ?? 6;
+  setRenderResolution(w, h);
+  if (!canvas.captureStream) { log("captureStream() unsupported in this browser"); resize(); return; }
+  const stream = canvas.captureStream(fps);
+  const rec = new MediaRecorder(stream, { mimeType: "video/webm;codecs=vp9" });
+  const chunks = [];
+  rec.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
+  document.getElementById("btn-webm").disabled = true;
+  log(`recording ${duration}s WebM @ ${w}x${h} ${fps}fps…`);
+  const N = Math.round(fps * duration);
+  rec.start();
+  for (let i = 0; i < N; i++) {
+    const t = i / Math.max(1, N - 1);
+    if (p.kind === "orbit") applyOrbitFrame(p, t);
+    else applyCameraStatic(p.camera || {});
+    renderer.render(scene, camera);
+    setProgress((i + 1) / N);
+    await new Promise(r => setTimeout(r, 1000 / fps));
+  }
+  rec.stop();
+  await new Promise(r => rec.onstop = r);
+  const blob = new Blob(chunks, { type: "video/webm" });
+  download(blob, `${p.id}.webm`);
+  log(`done: ${p.id}.webm (${(blob.size / 1024).toFixed(0)} KB)`);
+  document.getElementById("btn-webm").disabled = false;
+  setProgress(0);
+  resize();
+}
+
+// ── Helpers ────────────────────────────────────────────────────────────
+function download(blob, filename) {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  document.body.appendChild(a); a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+}
+
+// Minimal STORE-only ZIP builder (no compression dep)
+class SimpleZip {
+  constructor() { this.files = []; }
+  add(name, bytes) { this.files.push({ name, bytes }); }
+  build() {
+    const enc = new TextEncoder();
+    const records = []; let offset = 0;
+    const localHeaders = [], centralHeaders = [];
+    for (const f of this.files) {
+      const nameBytes = enc.encode(f.name);
+      const crc = crc32(f.bytes);
+      const local = new Uint8Array(30 + nameBytes.length + f.bytes.length);
+      const dv = new DataView(local.buffer);
+      dv.setUint32(0, 0x04034b50, true); dv.setUint16(4, 20, true);
+      dv.setUint16(6, 0, true); dv.setUint16(8, 0, true);
+      dv.setUint16(10, 0, true); dv.setUint16(12, 0, true);
+      dv.setUint32(14, crc, true); dv.setUint32(18, f.bytes.length, true);
+      dv.setUint32(22, f.bytes.length, true);
+      dv.setUint16(26, nameBytes.length, true); dv.setUint16(28, 0, true);
+      local.set(nameBytes, 30); local.set(f.bytes, 30 + nameBytes.length);
+      localHeaders.push({ data: local, offset });
+
+      const cd = new Uint8Array(46 + nameBytes.length);
+      const cdv = new DataView(cd.buffer);
+      cdv.setUint32(0, 0x02014b50, true); cdv.setUint16(4, 20, true);
+      cdv.setUint16(6, 20, true); cdv.setUint16(8, 0, true);
+      cdv.setUint16(10, 0, true); cdv.setUint16(12, 0, true);
+      cdv.setUint16(14, 0, true); cdv.setUint32(16, crc, true);
+      cdv.setUint32(20, f.bytes.length, true); cdv.setUint32(24, f.bytes.length, true);
+      cdv.setUint16(28, nameBytes.length, true); cdv.setUint16(30, 0, true);
+      cdv.setUint16(32, 0, true); cdv.setUint16(34, 0, true);
+      cdv.setUint16(36, 0, true); cdv.setUint32(38, 0, true);
+      cdv.setUint32(42, offset, true);
+      cd.set(nameBytes, 46);
+      centralHeaders.push(cd);
+      offset += local.length;
+    }
+    const cdSize = centralHeaders.reduce((s, c) => s + c.length, 0);
+    const eocd = new Uint8Array(22);
+    const edv = new DataView(eocd.buffer);
+    edv.setUint32(0, 0x06054b50, true);
+    edv.setUint16(8, this.files.length, true);
+    edv.setUint16(10, this.files.length, true);
+    edv.setUint32(12, cdSize, true);
+    edv.setUint32(16, offset, true);
+    const parts = [];
+    for (const lh of localHeaders) parts.push(lh.data);
+    for (const cd of centralHeaders) parts.push(cd);
+    parts.push(eocd);
+    return new Blob(parts, { type: "application/zip" });
+  }
+}
+const CRC_TABLE = (function () {
+  const t = new Uint32Array(256);
+  for (let n = 0; n < 256; n++) {
+    let c = n;
+    for (let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+    t[n] = c >>> 0;
+  }
+  return t;
+})();
+function crc32(bytes) {
+  let c = 0xFFFFFFFF;
+  for (let i = 0; i < bytes.length; i++) c = CRC_TABLE[(c ^ bytes[i]) & 0xFF] ^ (c >>> 8);
+  return (c ^ 0xFFFFFFFF) >>> 0;
+}
+
+// ── Boot ────────────────────────────────────────────────────────────────
+document.getElementById("btn-still").addEventListener("click", captureStill);
+document.getElementById("btn-png-seq").addEventListener("click", renderPngSequence);
+document.getElementById("btn-webm").addEventListener("click", recordWebM);
+
+await detectBackend();
+log("loading model…");
+await loadModel();
+log("ready.");
+animate();
+</script>
+</body>
+</html>
