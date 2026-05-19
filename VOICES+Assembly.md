@@ -180,14 +180,14 @@ Not installed by default. Install if user requests a "drawing package" deliverab
 
 ### Captions
 - Generate SRT alongside audio (one cue per narration line; durations from storyboard)
-- Burn in with ffmpeg `subtitles=` filter; opt-out via `captions=False` in storyboard
+- Do NOT Burn in subtitles from the SRT file, keep it dynamic and loadable by the video player.
 
 ## 7. Video assembly
 
 ### `ffmpeg` is the only video tool
 - Frame sequence → MP4: `ffmpeg -framerate 30 -i frame_%04d.png -c:v libx264 ...`
 - Mux audio + video: `-i video.mp4 -i audio.mp3 -c:v copy -c:a aac -shortest`
-- Burn captions: `-vf subtitles=captions.srt`
+- attach non-burned captions to video file`
 - Overlay PNG (for callouts/lower-thirds): `-filter_complex overlay=...`
 
 See `scripts/storyboard.py` and `scripts/voiceover.py` for canonical invocations.
