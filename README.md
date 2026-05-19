@@ -6,8 +6,7 @@ one pipeline.
 The AI plans all the shots & scripts. Each shot, the AI picks its render engine. The orchestrator dispatches per shot. Audio
 is generated first; video timing follows to be synced to audio markers.
 
-**Due to Github filesize limitations, after downloading this skill-- also download the Kokoro-82B TTS ONNX model from huggingface and add it into the folder.
-
+**Due to Github filesize limitations, Kokoro has been chunked and split into smaller files. A script + agent skill will re-combine them in deployment by AI.**
 ---
 
 The ultimate teaching-studio skill. Generate complete narrated educational, scientific, and engineering videos that combine: parametric CAD (build123d) with exploded views and orbital cameras (pyvista), Manim motion graphics and equation reveals, source-document image insertion (PDF page screenshots, Substack post screenshots, photographs, figures), composite overlays, AI-driven 3D reconstruction handoffs, and high-fidelity browser-GPU renders — all narrated with bundled neural Kokoro-82M CPU TTS (seven voices, no network).
