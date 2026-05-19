@@ -205,7 +205,7 @@ Documented in detail at `references/AGENT_LOOP.md`. Short version:
 ## License & attribution
 
 Bundled assets:
-- **Kokoro-82M** TTS model: given MIT license by the model authors.
+- **Kokoro-82M** TTS model: given permissive open license by the model authors.
 - **build123d, pyvista, manim, ffmpeg, Pillow**: open-source, see respective licenses.
 
 All other Motion Voice Studio code is MIT liscensed.
