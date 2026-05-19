@@ -6,6 +6,8 @@ one pipeline.
 The AI plans all the shots & scripts. Each shot, the AI picks its render engine. The orchestrator dispatches per shot. Audio
 is generated first; video timing follows to be synced to audio markers.
 
+**Due to Github filesize limitations, after downloading this skill-- also download the Kokoro-82B TTS ONNX model from huggingface and add it into the folder.
+
 ---
 
 The ultimate teaching-studio skill. Generate complete narrated educational, scientific, and engineering videos that combine: parametric CAD (build123d) with exploded views and orbital cameras (pyvista), Manim motion graphics and equation reveals, source-document image insertion (PDF page screenshots, Substack post screenshots, photographs, figures), composite overlays, AI-driven 3D reconstruction handoffs, and high-fidelity browser-GPU renders — all narrated with bundled neural Kokoro-82M CPU TTS (seven voices, no network).
@@ -25,6 +27,8 @@ The five concrete fixes from May 2026 production review:
 5. **Image-shot engine.** New render engine (`engine: "image"`) for image-driven shots (source pages, photographs, figures, slides) with letterboxing, optional Ken Burns, fade in/out. See `references/IMAGE_SHOT_ENGINE.md`.
 
 Plus: explicit agent loop discipline (`/brain` plan → `/grill` only when stuck → continue-on-tool-limit). See `references/AGENT_LOOP.md`.
+
+When user asks for a lesson animation or video, the lowest effort option allowed is atleast a manim only animation with narration, unless otherwise is asked by the user.
 
 ---
 
