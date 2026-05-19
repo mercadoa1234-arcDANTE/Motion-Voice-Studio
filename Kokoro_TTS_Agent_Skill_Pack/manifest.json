@@ -1,0 +1,59 @@
+{
+  "schema": "split-file/v1",
+  "original_filename": "kokoro-v1_0_fp16.onnx",
+  "original_size_bytes": 163234740,
+  "original_sha256": "ba4527a874b42b21e35f468c10d326fdff3c7fc8cac1f85e9eb6c0dfc35c334a",
+  "split_method": "raw byte concatenation (binary append, no compression, no encoding)",
+  "chunk_size_bytes": 24000000,
+  "chunk_size_human": "24 MB (24,000,000 bytes, decimal \u2014 safely under GitHub 25 MB cap)",
+  "reason": "GitHub blocks single-file uploads above 25 MB through the web UI. Chunks held to 24 MB decimal to stay strictly under that cap by every measurement.",
+  "part_count": 7,
+  "parts": [
+    {
+      "name": "kokoro-v1_0_fp16.onnx.part00",
+      "size_bytes": 24000000,
+      "sha256": "aaad68c06f30c913b6adfb7a6052abeb204e7ca655e991adda59ab1d768d656d"
+    },
+    {
+      "name": "kokoro-v1_0_fp16.onnx.part01",
+      "size_bytes": 24000000,
+      "sha256": "b094b94b3d475980855c90236acbf8f2b7bccb84f0658b5f69c559787a1abba6"
+    },
+    {
+      "name": "kokoro-v1_0_fp16.onnx.part02",
+      "size_bytes": 24000000,
+      "sha256": "6cc0bbe4e719e7fb0a033157b1c03db73694da20e085aababa46bc99f8c32496"
+    },
+    {
+      "name": "kokoro-v1_0_fp16.onnx.part03",
+      "size_bytes": 24000000,
+      "sha256": "7a9cab1694737707d696b7867e7d5b3eec0b3cf7990cd2708306fa04a50d9fa8"
+    },
+    {
+      "name": "kokoro-v1_0_fp16.onnx.part04",
+      "size_bytes": 24000000,
+      "sha256": "854c0e961e6f7684976e6513ec993fbe76e7a84f9c33ea5979de99074f0f3af3"
+    },
+    {
+      "name": "kokoro-v1_0_fp16.onnx.part05",
+      "size_bytes": 24000000,
+      "sha256": "05db1b914670b89b6c30961b2927d25f8cb4f6ab2f275226eb878e441b9f6d28"
+    },
+    {
+      "name": "kokoro-v1_0_fp16.onnx.part06",
+      "size_bytes": 19234740,
+      "sha256": "79f2aaf41c37063b28a7ec05c0cbef9ca649185caf01b6d4daf75b49497c9c1f"
+    }
+  ],
+  "companion_files": [
+    {
+      "name": "config.json",
+      "purpose": "Kokoro model configuration (vocab, istftnet, plbert). Required at inference time alongside the .onnx."
+    }
+  ],
+  "reassembly": {
+    "order": "lexicographic by filename (part00, part01, ...)",
+    "operation": "cat parts in order > kokoro-v1_0_fp16.onnx",
+    "verify": "sha256(reassembled) must equal original_sha256"
+  }
+}
