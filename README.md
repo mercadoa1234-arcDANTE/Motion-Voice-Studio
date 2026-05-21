@@ -4,7 +4,7 @@ Upload this skill to an AI chat for best results, otherwise paste a link to the 
 
 **Turn a question or idea or a math paper into computer animated graphics with AI generated Voiceover!**
 
-**The Ai will then make turn a JSON storyboard version into a narrated animated video. Runs entirely on CPU — no GPU, no cloud, no API keys.**
+**Give a prompt, question, or paper; the Ai will then make a JSON storyboard version and turn it into a narrated animated video. Runs entirely on CPU — no GPU, no cloud, no API keys.**
 
 Audio is synthesized first with [Kokoro TTS](https://github.com/thewh1teagle/kokoro-onnx) (ONNX, fp16, bundled). Frames are timed to match measured audio durations. The output is a soft-subtitled MP4.
 
