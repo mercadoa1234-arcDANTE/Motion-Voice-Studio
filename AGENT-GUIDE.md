@@ -51,6 +51,10 @@ These are valid parts of the repo, but loading them up front bloats context for 
 | `Kokoro_Model_Split_Files/` | Source artifacts for `combine.py`. Never read these directly. |
 | `model/`, `voices/` | Run-time binaries. Never read these directly. |
 
+Known critical files for Kokoro:
+The model assembly depends on Kokoro_TTS_Agent_Skill_Pack/manifest.json + combine.py + the split files in Kokoro_Model_Split_Files/ all being intact.
+This is becuase huggingface blocks agent access to download the ONNX kokoro TTS repo (but you can try this as a fallback), and github and max file size upload limitations.
+
 ---
 
 ## Storyboard schema (the minimum you need to remember)
