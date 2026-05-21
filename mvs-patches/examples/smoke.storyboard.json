@@ -1,0 +1,47 @@
+{
+  "title": "MVS Smoke Test",
+  "description": "Two-scene smoke storyboard. If this renders end-to-end, the full pipeline is wired correctly. Runs in ~30s on CPU.",
+  "output": {
+    "basename": "mvs_smoke",
+    "dir": "/tmp/mvs-smoke"
+  },
+  "video": { "width": 1280, "height": 720, "fps": 30 },
+  "audio": { "loudnorm_lufs": -14, "denoise_db": 12, "reverb": "none" },
+  "subtitles": { "mode": "soft", "format": "srt", "burn_in": false },
+  "default_voice": "af_bella",
+  "default_speed": 1.0,
+
+  "shots": [
+    {
+      "id": "smoke_title",
+      "engine": "manim",
+      "voice": "af_bella",
+      "speed": 1.0,
+      "narration": "If you can see this and hear my voice, your Motion Voice Studio install is working.",
+      "captions": true,
+      "action": {
+        "kind": "title",
+        "primary": "Smoke Test",
+        "secondary": "Motion-Voice-Studio",
+        "subtitle": "If you see this and hear voice, the pipeline works."
+      }
+    },
+    {
+      "id": "smoke_bullets",
+      "engine": "manim",
+      "voice": "af_bella",
+      "speed": 1.0,
+      "narration": "Audio first. Frames timed to audio. Subtitles soft subbed. Never burned.",
+      "captions": true,
+      "action": {
+        "kind": "bullets",
+        "title": "Pipeline Discipline",
+        "items": [
+          "Audio first — measured durations drive timing",
+          "Frames timed to audio, never the reverse",
+          "Subtitles soft-subbed, never burned"
+        ]
+      }
+    }
+  ]
+}
