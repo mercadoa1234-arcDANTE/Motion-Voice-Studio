@@ -75,6 +75,11 @@ Mix-and-match. A 6-minute video typically has 5–8 different engines across sho
 
 The `narration` field is the **single source of truth** for timing. Change it → everything downstream adjusts.
 
+> **Schema notes (post setup-easy patch):**
+> - The top-level scene array can be named `shots` or `scenes` — both are accepted by `voiceover.py`. Use `shots` in new work to match the function APIs (`plan_timeline`, `mix_audio_timeline`, `write_srt` all read `timeline["shots"]`).
+> - Each scene can carry one `action` (object) or multiple `actions` (array). The high-level renderer in `render_manim.render_action` takes a single action dict; the storyboard's `actions: [...]` shape is unpacked one entry at a time.
+> - See [`/AGENT-GUIDE.md`](../AGENT-GUIDE.md) for the per-kind required-field table and the paste-able pipeline snippet.
+
 ---
 
 ## Text display (required for all text elements)

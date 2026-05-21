@@ -1,18 +1,31 @@
 #!/usr/bin/env bash
-# verify_setup.sh — idempotent setup for cad-studio.
+# verify_setup.sh — idempotent setup + verification for Motion-Voice-Studio.
 # Checks Python deps, system tools, Kokoro assets, runs smoke tests.
+#
+# Unlike setup.sh (one-shot full install), this script is conservative:
+# it only installs what's missing, never overwrites anything, and is safe
+# to run repeatedly. The smoke tests at the end confirm end-to-end function.
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SKILL_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-UPLOADS="/mnt/user-data/uploads"
+UPLOADS="/mnt/user-data/uploads"   # claude.ai sandbox staging area (best-effort)
 
 G='\033[0;32m'; Y='\033[0;33m'; R='\033[0;31m'; B='\033[0;36m'; N='\033[0m'
 log()  { echo -e "${B}[verify]${N} $*"; }
 ok()   { echo -e "${G}  ✓${N} $*"; }
 warn() { echo -e "${Y}  ⚠${N} $*"; }
 err()  { echo -e "${R}  ✗${N} $*"; }
+
+# Privilege detection (mirrors setup.sh)
+if [ "$(id -u)" -eq 0 ]; then
+  SUDO=""
+elif command -v sudo >/dev/null 2>&1; then
+  SUDO="sudo"
+else
+  SUDO=""
+fi
 
 # ── 1. Python deps ─────────────────────────────────────────────────────────
 log "Python packages..."
@@ -44,7 +57,7 @@ log "System tools..."
 for tool in ffmpeg ffprobe espeak-ng Xvfb; do
   if ! command -v "$tool" >/dev/null 2>&1; then
     warn "$tool missing — installing"
-    apt-get install -y -qq "$tool" >/dev/null 2>&1 || {
+    $SUDO apt-get install -y -qq "$tool" >/dev/null 2>&1 || {
       err "$tool install failed; install manually then re-run."
       exit 3
     }
@@ -52,12 +65,12 @@ for tool in ffmpeg ffprobe espeak-ng Xvfb; do
   ok "$tool"
 done
 
-# v3: PDF tools for source_doc_pass.py
+# PDF tools for source_doc_pass.py
 log "PDF tools (v3 source-doc ingest)..."
 for tool in pdftoppm pdftotext pdfimages pdfinfo; do
   if ! command -v "$tool" >/dev/null 2>&1; then
     warn "$tool missing — installing poppler-utils"
-    apt-get install -y -qq poppler-utils >/dev/null 2>&1 || {
+    $SUDO apt-get install -y -qq poppler-utils >/dev/null 2>&1 || {
       warn "poppler-utils install failed; source-doc PDF ingest will not work"
     }
     break
@@ -75,11 +88,18 @@ done
 log "Pango / Cairo for manim..."
 if ! pkg-config --exists pangocairo 2>/dev/null; then
   warn "pangocairo dev headers missing — installing"
-  apt-get install -y -qq libpango1.0-dev libcairo2-dev pkg-config >/dev/null 2>&1 || {
+  $SUDO apt-get install -y -qq libpango1.0-dev libcairo2-dev pkg-config >/dev/null 2>&1 || {
     err "pango/cairo install failed"; exit 3
   }
 fi
 ok "pangocairo $(pkg-config --modversion pangocairo 2>/dev/null || echo '?')"
+
+# dvisvgm — required by manim for any SVG-based text/MathTex rendering
+if ! command -v dvisvgm >/dev/null 2>&1; then
+  warn "dvisvgm missing — installing"
+  $SUDO apt-get install -y -qq dvisvgm >/dev/null 2>&1 || warn "dvisvgm install failed"
+fi
+command -v dvisvgm >/dev/null 2>&1 && ok "dvisvgm"
 
 # LaTeX (MathTex) — opt-in. Test for it; don't install (~1 GB).
 if command -v latex >/dev/null 2>&1 && command -v dvisvgm >/dev/null 2>&1; then
@@ -93,7 +113,7 @@ fi
 if command -v openscad >/dev/null 2>&1; then
   ok "openscad (optional — installed)"
 else
-  warn "openscad not installed — solidpython2 still emits .scad, "
+  warn "openscad not installed — solidpython2 still emits .scad,"
   warn "  but kind='openscad' assembly components will fail to render in-sandbox."
   warn "  to enable: apt-get install -y openscad   (~300 MB)"
 fi
@@ -102,39 +122,83 @@ fi
 log "Kokoro assets..."
 mkdir -p "$SKILL_ROOT/model" "$SKILL_ROOT/voices"
 
-KOKORO="$SKILL_ROOT/model/kokoro-v1.0.fp16.onnx"
+# Canonical filename matches manifest.json. Legacy dotted name still accepted.
+KOKORO_CANONICAL="$SKILL_ROOT/model/kokoro-v1_0_fp16.onnx"
+KOKORO_LEGACY="$SKILL_ROOT/model/kokoro-v1.0.fp16.onnx"
 CONFIG="$SKILL_ROOT/model/config.json"
+MANIFEST="$SKILL_ROOT/Kokoro_TTS_Agent_Skill_Pack/manifest.json"
 
-if [ ! -s "$KOKORO" ]; then
-  for cand in "$UPLOADS/kokoro-v1.0.fp16.onnx" "$UPLOADS/model_fp16.onnx"; do
+# Pick whichever model path exists (prefer canonical)
+if [ -s "$KOKORO_CANONICAL" ]; then
+  KOKORO="$KOKORO_CANONICAL"
+elif [ -s "$KOKORO_LEGACY" ]; then
+  KOKORO="$KOKORO_LEGACY"
+  warn "model found at legacy path $(basename "$KOKORO_LEGACY") — rename to kokoro-v1_0_fp16.onnx"
+else
+  KOKORO="$KOKORO_CANONICAL"   # what we'll create
+fi
+
+# If model missing but split parts available, run combine.py automatically
+if [ ! -s "$KOKORO" ] && [ -f "$MANIFEST" ]; then
+  log "model missing but split parts manifest found — assembling via combine.py"
+  python3 "$SKILL_ROOT/Kokoro_TTS_Agent_Skill_Pack/combine.py" \
+    --manifest "$MANIFEST" \
+    --out "$SKILL_ROOT/model" && {
+      KOKORO="$KOKORO_CANONICAL"
+      ok "model assembled → $(basename "$KOKORO")"
+    } || warn "combine.py failed — see output above"
+fi
+
+# Legacy fallback path: stage from /mnt/user-data/uploads/ (claude.ai only)
+if [ ! -s "$KOKORO" ] && [ -d "$UPLOADS" ]; then
+  for cand in "$UPLOADS/kokoro-v1_0_fp16.onnx" "$UPLOADS/kokoro-v1.0.fp16.onnx" "$UPLOADS/model_fp16.onnx"; do
     if [ -s "$cand" ]; then
-      log "staging $(basename "$cand") → model/kokoro-v1.0.fp16.onnx"
-      cp "$cand" "$KOKORO"; break
+      log "staging $(basename "$cand") → model/kokoro-v1_0_fp16.onnx"
+      cp "$cand" "$KOKORO_CANONICAL"; KOKORO="$KOKORO_CANONICAL"; break
     fi
   done
 fi
+
+# config.json
 if [ ! -s "$CONFIG" ]; then
-  for cand in "$UPLOADS/config.json"; do
-    if [ -s "$cand" ]; then
-      log "staging config.json"
-      cp "$cand" "$CONFIG"; break
-    fi
+  if [ -f "$SKILL_ROOT/Kokoro_TTS_Agent_Skill_Pack/config.json" ]; then
+    log "staging config.json from Kokoro_TTS_Agent_Skill_Pack/"
+    cp "$SKILL_ROOT/Kokoro_TTS_Agent_Skill_Pack/config.json" "$CONFIG"
+  elif [ -d "$UPLOADS" ] && [ -s "$UPLOADS/config.json" ]; then
+    log "staging config.json from uploads"
+    cp "$UPLOADS/config.json" "$CONFIG"
+  fi
+fi
+
+# Voices: prefer in-repo kokoro-voices/, fall back to uploads
+if ! ls "$SKILL_ROOT/voices"/*.pt >/dev/null 2>&1; then
+  if [ -d "$SKILL_ROOT/kokoro-voices" ]; then
+    n=0
+    for src in "$SKILL_ROOT/kokoro-voices"/*.pt; do
+      [ -s "$src" ] || continue
+      cp "$src" "$SKILL_ROOT/voices/"; n=$((n+1))
+    done
+    [ "$n" -gt 0 ] && ok "staged $n voice(s) from kokoro-voices/"
+  fi
+fi
+if [ -d "$UPLOADS" ]; then
+  for src in "$UPLOADS"/*.pt; do
+    [ -s "$src" ] || continue
+    name=$(basename "$src")
+    dst="$SKILL_ROOT/voices/$name"
+    [ -s "$dst" ] || { cp "$src" "$dst" && ok "staged voice $name from uploads"; }
   done
 fi
-for src in "$UPLOADS"/*.pt; do
-  [ -s "$src" ] || continue
-  name=$(basename "$src")
-  dst="$SKILL_ROOT/voices/$name"
-  [ -s "$dst" ] || cp "$src" "$dst" && ok "staged voice $name"
-done
 
 # ── 4. Inventory ──────────────────────────────────────────────────────────
 log "Inventory..."
 missing=0
 if [ -s "$KOKORO" ]; then
-  ok "model/kokoro-v1.0.fp16.onnx ($(du -h "$KOKORO" | cut -f1))"
+  ok "$(realpath --relative-to="$SKILL_ROOT" "$KOKORO" 2>/dev/null || echo "$KOKORO") ($(du -h "$KOKORO" | cut -f1))"
 else
-  err "kokoro model missing — upload kokoro-v1.0.fp16.onnx to $UPLOADS"
+  err "kokoro model missing"
+  err "  run: cd Kokoro_TTS_Agent_Skill_Pack/ && python combine.py --out ../model/"
+  echo "    or upload kokoro-v1_0_fp16.onnx to $UPLOADS"
   echo "    source: https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX"
   missing=1
 fi
@@ -151,7 +215,8 @@ fi
 set +e
 log "Smoke tests..."
 
-# build123d → trimesh → pyvista path
+# build123d → trimesh → pyvista path (only if those modules are installed)
+if python3 -c "import build123d, trimesh, pyvista" 2>/dev/null; then
 python3 - <<PY 2>/dev/null
 import sys, os
 sys.path.insert(0, "$SCRIPT_DIR")
@@ -177,6 +242,9 @@ print(f"  pyvista headless render ok ({os.path.getsize('/tmp/cs_smoke.png')} byt
 PY
 rc=$?
 [ $rc -eq 0 ] && ok "build123d + pyvista smoke ok" || warn "smoke test rc=$rc (often cosmetic exit noise; check above)"
+else
+  warn "build123d/trimesh/pyvista not installed — skipping CAD smoke test (only needed for CAD scenes)"
+fi
 
 # Kokoro if available
 if [ -s "$KOKORO" ] && [ "$n_voices" -ge 1 ]; then
@@ -210,17 +278,17 @@ class Smoke(Scene):
         self.wait(0.2)
 ''')
 result = subprocess.run(
-    ["manim", "render", "-ql", "--transparent", "--disable_caching",
+    ["manim", "render", "-ql", "--disable_caching",
      "--media_dir", tmp, scene_path, "Smoke"],
     capture_output=True, text=True,
 )
-movs = []
+videos = []
 for root, _, files in os.walk(tmp):
     for fn in files:
-        if fn.endswith(".mov"):
-            movs.append(os.path.join(root, fn))
-if movs:
-    print(f"  manim rendered: {os.path.basename(movs[0])}")
+        if fn.endswith(".mp4") or fn.endswith(".mov"):
+            videos.append(os.path.join(root, fn))
+if videos:
+    print(f"  manim rendered: {os.path.basename(videos[0])}")
 else:
     print(f"  manim FAILED: {result.stderr[:200]}")
     sys.exit(1)
@@ -228,6 +296,14 @@ import shutil; shutil.rmtree(tmp, ignore_errors=True)
 PY
 rc=$?
 [ $rc -eq 0 ] && ok "manim smoke ok" || warn "manim smoke rc=$rc"
+
+# engines/text_display.py at canonical path
+if [ -f "$SKILL_ROOT/engines/text_display.py" ]; then
+  ok "engines/text_display.py present (canonical path)"
+elif [ -f "$SKILL_ROOT/MVS-README-DOCS-FOR-AGENTS-START-HERE/text_display.py" ]; then
+  warn "text_display.py at legacy docs path — move to engines/ for canonical imports"
+  warn "  git mv MVS-README-DOCS-FOR-AGENTS-START-HERE/text_display.py engines/text_display.py"
+fi
 
 set -e
 ok "Setup OK. Ready."

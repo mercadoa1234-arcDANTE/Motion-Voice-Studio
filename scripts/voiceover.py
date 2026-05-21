@@ -36,7 +36,38 @@ from typing import Optional
 
 
 SKILL_ROOT = Path(__file__).resolve().parent.parent
-KOKORO_MODEL = SKILL_ROOT / "model" / "kokoro-v1.0.fp16.onnx"
+
+# Canonical model filename matches the manifest (underscored).
+# The dotted name is the historic v2 default; kept as a fallback so
+# previously-staged installs don't break on upgrade. New stagings should
+# always use the canonical name.
+KOKORO_MODEL_CANONICAL = SKILL_ROOT / "model" / "kokoro-v1_0_fp16.onnx"
+KOKORO_MODEL_LEGACY    = SKILL_ROOT / "model" / "kokoro-v1.0.fp16.onnx"
+
+
+def _resolve_kokoro_model() -> Path:
+    """Pick the model path: canonical (underscored) first, legacy (dotted) as fallback.
+
+    Emits a one-line deprecation warning the first time the legacy path is used,
+    so users know to rename their file before the legacy fallback gets removed.
+    """
+    if KOKORO_MODEL_CANONICAL.exists():
+        return KOKORO_MODEL_CANONICAL
+    if KOKORO_MODEL_LEGACY.exists():
+        if not getattr(_resolve_kokoro_model, "_warned", False):
+            print(
+                f"  [voiceover] DEPRECATION: model found at legacy path "
+                f"{KOKORO_MODEL_LEGACY.name}. Rename to "
+                f"{KOKORO_MODEL_CANONICAL.name} to match manifest. "
+                f"Legacy fallback will be removed in a future release.",
+                file=sys.stderr,
+            )
+            _resolve_kokoro_model._warned = True
+        return KOKORO_MODEL_LEGACY
+    return KOKORO_MODEL_CANONICAL  # canonical path for the "missing file" error message
+
+
+KOKORO_MODEL = _resolve_kokoro_model()
 KOKORO_CONFIG = SKILL_ROOT / "model" / "config.json"
 KOKORO_VOICES = SKILL_ROOT / "voices"
 CACHE_DIR = Path.home() / ".cache" / "cad-studio-voiceover"
@@ -54,20 +85,26 @@ DEFAULT_PACING = {
 _engine = None
 
 def _kokoro_available() -> bool:
-    return KOKORO_MODEL.exists() and KOKORO_CONFIG.exists() and any(KOKORO_VOICES.glob("*.pt"))
+    # Re-resolve at call time so a model staged after import is still found.
+    model = _resolve_kokoro_model()
+    return model.exists() and KOKORO_CONFIG.exists() and any(KOKORO_VOICES.glob("*.pt"))
 
 
 def _get_kokoro_engine():
     """Lazy-init Kokoro. Returns the engine or raises."""
-    global _engine
+    global _engine, KOKORO_MODEL
     if _engine is not None:
         return _engine
     if not _kokoro_available():
         raise FileNotFoundError(
-            f"Kokoro assets missing under {SKILL_ROOT}. "
-            f"Need model/kokoro-v1.0.fp16.onnx, model/config.json, voices/*.pt. "
-            f"Run scripts/verify_setup.sh to stage from /mnt/user-data/uploads/."
+            f"Kokoro assets missing under {SKILL_ROOT}.\n"
+            f"  Need: model/kokoro-v1_0_fp16.onnx, model/config.json, voices/*.pt\n"
+            f"  To assemble the model from the bundled split parts, run:\n"
+            f"    cd Kokoro_TTS_Agent_Skill_Pack/\n"
+            f"    python combine.py --out ../model/\n"
+            f"  Or run scripts/verify_setup.sh to install + stage in one step."
         )
+    KOKORO_MODEL = _resolve_kokoro_model()  # refresh in case it was just staged
     sys.path.insert(0, str(SKILL_ROOT / "scripts"))
     from kokoro_engine import KokoroEngine
     _engine = KokoroEngine(str(KOKORO_MODEL), str(KOKORO_CONFIG), str(KOKORO_VOICES))
@@ -468,7 +505,14 @@ if __name__ == "__main__":
     args = ap.parse_args()
 
     schema = json.loads(Path(args.storyboard).read_text())
-    shots = schema["shots"]
+    # Accept either 'shots' (canonical, matches plan_timeline output) or 'scenes'
+    # (used by some Core Production Contract examples). Equivalent meaning.
+    shots = schema.get("shots") or schema.get("scenes")
+    if not shots:
+        raise ValueError(
+            f"Storyboard must contain a 'shots' or 'scenes' array. "
+            f"Got top-level keys: {sorted(schema.keys())}"
+        )
     print(f"[voiceover] {len(shots)} shots, engine={args.engine}")
     records = generate_narration(shots, args.out_dir, engine=args.engine,
                                   default_voice=args.default_voice)
