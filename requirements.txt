@@ -1,0 +1,39 @@
+# Motion-Voice-Studio — Python dependencies
+#
+# Pinned to the versions verified working end-to-end. Manim in particular
+# changes its DSL between minor releases; do not unpin without re-running
+# the smoke storyboard.
+#
+# System packages (apt or equivalent) are NOT covered here — see setup.sh.
+# Required system tools: ffmpeg, espeak-ng, dvisvgm, libpangocairo,
+# texlive-latex-extra (for MathTex).
+
+# ── Animation ─────────────────────────────────────────────────────────────
+manim==0.20.1
+manimpango>=0.6.0
+pycairo>=1.20.0
+
+# ── TTS (Kokoro pipeline) ─────────────────────────────────────────────────
+onnxruntime>=1.20.0
+phonemizer-fork>=3.3.0
+soundfile>=0.12.1
+numpy>=1.26.0,<2.0           # numpy 2.x has broken some ONNX inference paths
+
+# ── Fallback TTS ──────────────────────────────────────────────────────────
+gTTS>=2.5.0
+
+# ── Optional CAD / 3D (only needed if you use the CAD module) ─────────────
+# Uncomment if your storyboards use pyvista/build123d/openscad scenes.
+# build123d>=0.6.0
+# trimesh>=4.0.0
+# pyvista>=0.43.0
+# ezdxf>=1.2.0
+# solidpython2>=2.1.0
+
+# ── Image / video utilities ───────────────────────────────────────────────
+Pillow>=10.0.0
+opencv-python-headless>=4.9.0
+
+# ── Math / scientific (used by some scene types and audio_master.py) ──────
+scipy>=1.11.0
+matplotlib>=3.8.0
